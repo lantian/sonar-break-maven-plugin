@@ -26,6 +26,10 @@ public class SonarBreakMojo extends AbstractMojo {
     protected String waitForProcessingSeconds;
     @Parameter(property = "sonar.projectKey", defaultValue = "")
     protected String sonarKey;
+    @Parameter(property = "sonar.login", defaultValue = "")
+    protected String sonarLogin;
+    @Parameter(property = "sonar.password", defaultValue = "")
+    protected String sonarPassword;
 
     protected static String buildErrorString(List<Condition> conditions) {
         StringBuilder builder = new StringBuilder();
@@ -50,7 +54,7 @@ public class SonarBreakMojo extends AbstractMojo {
             Query query = new Query(sonarKey, version);
             final int sonarLookBackSecondsParsed = parseParam(sonarLookBackSeconds, "sonarLookBackSeconds");
             final int waitForProcessingSecondsParsed = parseParam(waitForProcessingSeconds, "waitForProcessingSeconds");
-            QueryExecutor executor = new QueryExecutor(sonarServer, sonarLookBackSecondsParsed, waitForProcessingSecondsParsed, getLog());
+            QueryExecutor executor = new QueryExecutor(sonarServer, sonarLogin, sonarPassword, sonarLookBackSecondsParsed, waitForProcessingSecondsParsed, getLog());
             Result result = executor.execute(query);
             processResult(result);
 

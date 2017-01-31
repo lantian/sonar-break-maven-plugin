@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sgoertzen.sonarbreak.qualitygate.Query;
 import com.sgoertzen.sonarbreak.qualitygate.Result;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.plugin.logging.Log;
+import org.codehaus.plexus.util.Base64;
 import org.joda.time.DateTime;
 
 import java.io.IOException;
@@ -30,6 +32,8 @@ public class QueryExecutor {
     public static final int SONAR_PROCESSING_WAIT_TIME = 10000;  // wait time between sonar checks in milliseconds
 
     private final URL sonarURL;
+    private final String sonarLogin;
+    private final String sonarPassword;
     private final int sonarLookBackSeconds;
     private final int waitForProcessingSeconds;
     private final Log log;
@@ -38,13 +42,17 @@ public class QueryExecutor {
      * Creates a new executor for running queries against sonar.
      *
      * @param sonarServer              Fully qualified URL to the sonar server
+     * @param sonarLogin               Sonar login
+     * @param sonarPassword            Sonar password
      * @param sonarLookBackSeconds     Amount of time to look back into sonar history for the results of this build
      * @param waitForProcessingSeconds Amount of time to wait for sonar to finish processing the job
      * @param log                      Log for logging  @return Results indicating if the build passed the sonar quality gate checks
      * @throws MalformedURLException If the sonar url is invalid
      */
-    public QueryExecutor(String sonarServer, int sonarLookBackSeconds, int waitForProcessingSeconds, Log log) throws MalformedURLException {
+    public QueryExecutor(String sonarServer, String sonarLogin, String sonarPassword, int sonarLookBackSeconds, int waitForProcessingSeconds, Log log) throws MalformedURLException {
         this.sonarURL = new URL(sonarServer);
+        this.sonarLogin = sonarLogin;
+        this.sonarPassword = sonarPassword;
         this.sonarLookBackSeconds = sonarLookBackSeconds;
         this.waitForProcessingSeconds = waitForProcessingSeconds;
         this.log = log;
@@ -138,7 +146,7 @@ public class QueryExecutor {
     private Result fetchSonarStatus(URL queryURL) throws IOException, SonarBreakException {
         InputStream in = null;
         try {
-            URLConnection connection = queryURL.openConnection();
+            URLConnection connection = openConnection(queryURL);
             connection.setRequestProperty("Accept", "application/json");
             in = connection.getInputStream();
 
@@ -147,6 +155,23 @@ public class QueryExecutor {
         } finally {
             IOUtils.closeQuietly(in);
         }
+    }
+
+    /**
+     * Open connection to url and set request properties.
+     *
+     * @param url Url to open.
+     * @return Connection.
+     * @throws IOException
+     */
+    private HttpURLConnection openConnection(URL url) throws IOException {
+        final HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        if (StringUtils.isNotEmpty(sonarLogin)) {
+            final String userpass = sonarLogin + ":" + sonarPassword;
+            final String basicAuth = "Basic " + new String(new Base64().encode(userpass.getBytes()));
+            connection.setRequestProperty("Authorization", basicAuth);
+        }
+        return connection;
     }
 
     /**
@@ -162,7 +187,7 @@ public class QueryExecutor {
     protected boolean isURLAvailable(URL url, int retryCount) throws IOException {
         boolean serviceFound = false;
         for (int i = 0; i < retryCount; i++) {
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            HttpURLConnection connection = openConnection(url);
             connection.setRequestMethod("HEAD");
             int responseCode = connection.getResponseCode();
             if (200 <= responseCode && responseCode <= 399) {
